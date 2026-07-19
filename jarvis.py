@@ -1,7 +1,10 @@
-import ollama
+from models.ollama_client import OllamaClient
+from models.prompts import SYSTEM_PROMPT
 import threading
 from wake import listen_for_wake_word
 from listen_command import record_command, transcribe
+from core.assistant import Assistant
+from core.state import AssistantState
 from speak import speak, reset_delay
 from actions import (
     open_app, close_app, search_files, open_file, open_folder,
@@ -10,33 +13,7 @@ from actions import (
 import gui
 
 MAX_STEPS = 7
-
-SYSTEM_PROMPT = """You are Jarvis, an intelligent voice assistant with full control over the user's PC.
-You are the brain — you decide the fastest, most efficient way to complete each request. Think before acting.
-
-Each turn, respond with EXACTLY ONE of these, and nothing else:
-
-ACTION:find_installed_app:<appname>       (fastest way to locate an installed app — try this FIRST for "find/open/close X app" requests)
-ACTION:quick_search_files:<keyword>       (fast, checks common folders only — try this before a deep search)
-ACTION:search_files:<keyword>             (SLOW, scans every drive fully — only use if the fast options failed)
-ACTION:open_app:<appname or full path>    (use a known app name, OR the exact full path returned by find_installed_app/quick_search_files)
-ACTION:close_app:<appname>
-ACTION:open_file:<full path>
-ACTION:open_folder:<full path>
-ACTION:delete_file:<full path>
-ACTION:copy_file:<source path>|<destination path>
-ACTION:move_file:<source path>|<destination path>
-ASK:<question you need to ask the user before continuing>
-SAY:<short, natural, spoken-style final answer to the user, 1-2 sentences max>
-
-Rules:
-- Always try the fastest method first. Never jump straight to a full drive search.
-- After an action result comes back, decide: is this enough to answer, do you need another action, or do you need to ask the user something?
-- Never repeat the exact same action twice in a row. If a result already gave you what you need (e.g. a file path), use that result in your next action instead of searching again.
-- When giving a final answer with SAY, be brief and conversational — never read out raw lists of file paths. Summarize.
-- Only use ASK if you genuinely cannot proceed without more info from the user.
-- Do not narrate your reasoning. Output only one line in one of the formats above.
-"""
+assistant = Assistant()
 
 AFFIRMATIVE_WORDS = {"yes", "yeah", "yep", "confirm", "correct", "do it", "go ahead", "sure"}
 
@@ -106,9 +83,6 @@ ACTIONS = {
     "move_file": lambda args: move_file(args[0], args[1]),
 }
 
-def ask_llm(messages):
-    response = ollama.chat(model="llama3.1:8b", messages=messages, stream=False)
-    return response["message"]["content"]
 
 def handle_command(text):
     messages = [
@@ -119,7 +93,7 @@ def handle_command(text):
 
     for step in range(MAX_STEPS):
         gui.set_state('thinking')
-        raw = ask_llm(messages)
+        raw = assistant.ask_llm(messages)
         print(f"[Jarvis reasoning] {raw}")
 
         if raw.strip() == last_raw:
