@@ -5,6 +5,7 @@ from wake import listen_for_wake_word
 from listen_command import record_command, transcribe
 from core.assistant import Assistant
 from core.state import AssistantState
+from core.router import CommandRouter
 from speak import speak, reset_delay
 from actions import (
     open_app, close_app, search_files, open_file, open_folder,
@@ -83,6 +84,8 @@ ACTIONS = {
     "move_file": lambda args: move_file(args[0], args[1]),
 }
 
+router = CommandRouter(ACTIONS)
+
 
 def handle_command(text):
     messages = [
@@ -93,7 +96,20 @@ def handle_command(text):
 
     for step in range(MAX_STEPS):
         gui.set_state('thinking')
-        raw = assistant.ask_llm(messages)
+        raw = ""
+
+        for chunk in assistant.stream_llm(messages):
+            if "message" not in chunk:
+                continue
+
+            content = chunk["message"].get("content", "")
+            raw += content
+
+            # Stop generating as soon as a complete command is produced
+            if raw.startswith(("ACTION:", "SAY:", "ASK:")) and "\n" in raw:
+                break
+
+        raw = raw.strip()
         print(f"[Jarvis reasoning] {raw}")
 
         if raw.strip() == last_raw:
@@ -117,15 +133,10 @@ def handle_command(text):
             continue
 
         if kind == "ACTION":
-            args = payload.split("|")
-            action_fn = ACTIONS.get(action_name)
-            if action_fn:
-                try:
-                    result = action_fn(args)
-                except Exception as e:
-                    result = f"Error: {e}"
-            else:
-                result = f"Unknown action: {action_name}"
+            success, result = router.execute(action_name, payload)
+
+            if not success:
+                result = f"Error: {result}"
 
             messages.append({"role": "assistant", "content": raw})
             messages.append({"role": "user", "content": f"Tool result: {result}"})
