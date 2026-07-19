@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# Build outputs
+build/
+dist/
+
+# PyInstaller
+*.spec.bak
+
+# Logs
+*.log
+jarvis_log.txt
+
+# IDE
+.idea/
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Environment variables
+.env
+
+# Cache
+.cache/
