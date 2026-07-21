@@ -1,0 +1,196 @@
+================================================================================
+                         HOW TO RUN JARVIS - SIMPLE GUIDE
+================================================================================
+
+🎯 MAIN COMMAND TO RUN JARVIS:
+
+    python tray_app.py
+
+That's it! But you need to do a few things first...
+
+================================================================================
+                           📋 BEFORE YOU START
+================================================================================
+
+1. INSTALL OLLAMA (the AI brain)
+   Download: https://ollama.ai
+   
+2. DOWNLOAD A MODEL
+   Open command prompt and run:
+   
+   ollama pull llama3.1:8b
+   
+   OR
+   
+   ollama pull mistral:7b
+
+3. INSTALL PYTHON DEPENDENCIES
+   
+   cd C:\Jarvis
+   pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil
+
+================================================================================
+                      🚀 STEP-BY-STEP STARTUP (EVERY TIME)
+================================================================================
+
+STEP 1: Open Command Prompt / PowerShell
+
+STEP 2: Navigate to Jarvis folder
+   cd C:\Jarvis
+
+STEP 3: Activate virtual environment (if you have one)
+   venv\Scripts\activate
+
+STEP 4: Start Ollama in ANOTHER terminal/PowerShell window
+   ollama serve
+   
+   (Leave this running in the background)
+
+STEP 5: Back in the first terminal, run Jarvis:
+   python tray_app.py
+
+STEP 6: Wait for the popup window with the blue sphere to appear
+
+STEP 7: Say "Hey Jarvis" into your microphone
+
+Done! 🎉
+
+================================================================================
+                          ⚡ QUICK COMMANDS
+================================================================================
+
+First Time Only (Setup):
+───────────────────────────────────────────────────────────────────────────
+cd C:\Jarvis
+python -m venv venv
+venv\Scripts\activate
+pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil
+
+
+Every Time (Two Terminals):
+───────────────────────────────────────────────────────────────────────────
+Terminal 1 (Keep running):
+   ollama serve
+
+Terminal 2 (Run Jarvis):
+   cd C:\Jarvis
+   venv\Scripts\activate
+   python tray_app.py
+
+
+================================================================================
+                      🎤 WHAT TO SAY TO JARVIS
+================================================================================
+
+After saying "Hey Jarvis", you can say things like:
+
+• "Open Chrome"
+• "Close notepad"
+• "Open YouTube in Chrome"
+• "Search for files named document"
+• "What time is it?"
+• "Open my downloads folder"
+• "Find installed apps"
+• "Open calculator"
+
+================================================================================
+                        🛠️ TROUBLESHOOTING
+================================================================================
+
+PROBLEM: "No module named 'X'"
+SOLUTION: Install missing package
+   pip install [package_name]
+
+PROBLEM: "Ollama is not responding"
+SOLUTION: Make sure Ollama is running in another terminal
+   ollama serve
+
+PROBLEM: "Microphone not found"
+SOLUTION: 
+   1. Check microphone is plugged in
+   2. Check Windows sound settings
+   3. Allow Jarvis access in Windows Privacy settings
+
+PROBLEM: "Permission denied"
+SOLUTION: Run as administrator
+   Right-click Command Prompt → "Run as administrator"
+
+PROBLEM: Can't find the window
+SOLUTION: Look in the system tray (bottom right of taskbar)
+   Click the up arrow if you don't see it
+
+================================================================================
+                     📁 IMPORTANT LOCATIONS
+================================================================================
+
+Project Folder:        C:\Jarvis
+Virtual Environment:   C:\Jarvis\venv
+Log File:             %USERPROFILE%\jarvis_log.txt
+Memory/History:       %USERPROFILE%\.jarvis\conversation_memory.json
+
+View logs:
+   type %USERPROFILE%\jarvis_log.txt
+
+================================================================================
+                        🔧 HELPFUL COMMANDS
+================================================================================
+
+Check if Ollama is running:
+   ollama list
+
+Check if model is installed:
+   ollama list
+
+Test the model:
+   ollama run llama3.1:8b "Hello"
+
+View Jarvis logs:
+   type %USERPROFILE%\jarvis_log.txt
+
+Check Python version:
+   python --version
+
+Check if module is installed:
+   pip show ollama
+
+================================================================================
+                     ✅ EVERYTHING READY CHECKLIST
+================================================================================
+
+□ Python 3.9+ installed
+□ Ollama installed and running (ollama serve)
+□ Model downloaded (ollama pull llama3.1:8b)
+□ Virtual environment created
+□ Dependencies installed (pip install...)
+□ In C:\Jarvis directory
+□ Virtual environment activated
+□ Microphone working
+
+If all checked, run:
+   python tray_app.py
+
+================================================================================
+                        🎯 THE ONE COMMAND
+================================================================================
+
+Once everything is set up, to run Jarvis:
+
+   cd C:\Jarvis && venv\Scripts\activate && python tray_app.py
+
+That's it!
+
+================================================================================
+                          📞 NEED HELP?
+================================================================================
+
+Check these files:
+• RUNNING_JARVIS.md - Detailed instructions
+• QUICK_START.txt - All commands at a glance
+• IMPROVEMENTS_QUICK_REFERENCE.md - Recent improvements
+
+================================================================================
+
+Status: ✅ READY TO RUN
+Date: 2026-07-21
+
+Good luck! Say "Hey Jarvis" and enjoy! 🚀

@@ -1,0 +1,221 @@
+# ⚡ QUICK START COMMAND REFERENCE
+
+## The Quick Way (Copy & Paste)
+
+### For First Time Setup:
+
+```bash
+cd C:\Jarvis
+python -m venv venv
+venv\Scripts\activate
+pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil
+```
+
+### Start Ollama (In Separate Terminal):
+
+```bash
+ollama serve
+```
+
+### Run Jarvis:
+
+```bash
+cd C:\Jarvis
+venv\Scripts\activate
+python tray_app.py
+```
+
+---
+
+## All Commands at a Glance
+
+| Task | Command |
+|------|---------|
+| **Navigate to project** | `cd C:\Jarvis` |
+| **Activate virtual env** | `venv\Scripts\activate` |
+| **Install packages** | `pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil` |
+| **Start Ollama** | `ollama serve` |
+| **Pull LLM model** | `ollama pull llama3.1:8b` |
+| **List available models** | `ollama list` |
+| **Run Jarvis** | `python tray_app.py` |
+| **Run as admin** | Right-click cmd → "Run as administrator" then `python tray_app.py` |
+| **Build executable** | `pyinstaller Jarvis.spec` |
+| **View logs** | `type %USERPROFILE%\jarvis_log.txt` |
+| **Check memory** | `type %USERPROFILE%\.jarvis\conversation_memory.json` |
+
+---
+
+## Three-Step Startup (Every Time After First Setup)
+
+### **Terminal 1: Start Ollama**
+```bash
+ollama serve
+```
+
+### **Terminal 2: Run Jarvis**
+```bash
+cd C:\Jarvis
+venv\Scripts\activate
+python tray_app.py
+```
+
+### **Use Jarvis**
+- Look for blue sphere in system tray (bottom right)
+- Say "Hey Jarvis"
+- Give commands!
+
+---
+
+## Troubleshooting Commands
+
+```bash
+# Check Python version
+python --version
+
+# Check if module is installed
+pip show ollama
+
+# Reinstall packages
+pip install --upgrade --force-reinstall ollama
+
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Clear Python cache
+python -m py_compile jarvis.py
+```
+
+---
+
+## One-Liner Commands
+
+### Run everything at once (if Ollama already running):
+```bash
+cd C:\Jarvis && venv\Scripts\activate && python tray_app.py
+```
+
+### Check all dependencies installed:
+```bash
+python -c "import ollama, pyttsx3, pyaudio, sounddevice, openwakeword, faster_whisper, webrtcvad, pystray, PIL, pywebview; print('✓ All dependencies OK')"
+```
+
+### View conversation memory:
+```bash
+type %USERPROFILE%\.jarvis\conversation_memory.json
+```
+
+---
+
+## Interactive Test Commands
+
+```bash
+# Test if Ollama responds
+ollama list
+
+# Test if model loads
+ollama run llama3.1:8b "Hello"
+
+# Test Python modules individually
+python -c "from jarvis import main; print('✓ jarvis.py OK')"
+python -c "from tray_app import *; print('✓ tray_app.py OK')"
+python -c "from actions import *; print('✓ actions.py OK')"
+```
+
+---
+
+## Important Paths
+
+- **Project Directory**: `C:\Jarvis`
+- **Virtual Environment**: `C:\Jarvis\venv`
+- **Logs**: `%USERPROFILE%\jarvis_log.txt`
+- **Memory**: `%USERPROFILE%\.jarvis\conversation_memory.json`
+- **Config (if you add it)**: `%USERPROFILE%\.jarvis\config.json`
+
+---
+
+## Environment Variables (Optional)
+
+```bash
+# Set default model
+set OLLAMA_MODEL=llama3.1:8b
+
+# Set Ollama port
+set OLLAMA_PORT=11434
+
+# Set debug mode (not currently used but good practice)
+set DEBUG=1
+```
+
+---
+
+## Video-Style Step by Step
+
+**Step 1:** Open Command Prompt (cmd.exe or PowerShell)
+```bash
+cd C:\Jarvis
+```
+
+**Step 2:** Activate environment
+```bash
+venv\Scripts\activate
+```
+
+**Step 3:** Open ANOTHER terminal and start Ollama
+```bash
+ollama serve
+```
+
+**Step 4:** Back in first terminal, run Jarvis
+```bash
+python tray_app.py
+```
+
+**Step 5:** Wait for "Jarvis is online" message in popup
+
+**Step 6:** Say "Hey Jarvis" into your microphone
+
+**Done!** 🎉
+
+---
+
+## If Something Goes Wrong
+
+1. **Check Ollama is running** (do `ollama list` in another terminal)
+2. **Check microphone is plugged in** and enabled in Windows
+3. **Reinstall packages** if modules missing:
+   ```bash
+   pip install --force-reinstall -r requirements.txt
+   ```
+4. **Check logs** for error details:
+   ```bash
+   type %USERPROFILE%\jarvis_log.txt
+   ```
+5. **Run as admin** if permission errors:
+   - Right-click Command Prompt
+   - Select "Run as administrator"
+
+---
+
+## Model Recommendations
+
+```bash
+# Fast & Good Quality
+ollama pull mistral:7b
+
+# Balanced
+ollama pull neural-chat:7b
+
+# Best Quality (but slower)
+ollama pull llama3.1:8b
+
+# Check which one you have
+ollama list
+
+# Use specific model by changing this in code:
+# model="llama3.1:8b"
+```
+
+---
+
+**Status**: ✅ Ready to Run  
+**Date**: 2026-07-21

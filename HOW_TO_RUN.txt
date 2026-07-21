@@ -1,0 +1,128 @@
+# 🎯 JARVIS - HOW TO RUN (Final Summary)
+
+## The Main Command
+
+```bash
+python tray_app.py
+```
+
+**That's the command you need!** But there are prerequisites...
+
+---
+
+## 📋 Prerequisites Checklist
+
+Before running Jarvis, you need:
+
+- ✅ **Python 3.9+** installed
+- ✅ **Ollama** installed from https://ollama.ai
+- ✅ **LLM Model** downloaded (e.g., `llama3.1:8b`)
+- ✅ **Python packages** installed
+- ✅ **Microphone** connected to your computer
+
+---
+
+## 🚀 Quick Setup (First Time Only)
+
+Copy and paste these commands in order:
+
+```bash
+# 1. Go to Jarvis folder
+cd C:\Jarvis
+
+# 2. Create virtual environment
+python -m venv venv
+
+# 3. Activate it
+venv\Scripts\activate
+
+# 4. Install packages
+pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil
+```
+
+Then download a model (open NEW command prompt):
+
+```bash
+ollama pull llama3.1:8b
+```
+
+**Done with setup!** ✅
+
+---
+
+## ▶️ How to Run (Every Time)
+
+You need **TWO** terminals open:
+
+### Terminal 1: Start Ollama (Background)
+```bash
+ollama serve
+```
+**Leave this running!**
+
+### Terminal 2: Run Jarvis
+```bash
+cd C:\Jarvis
+venv\Scripts\activate
+python tray_app.py
+```
+
+**That's it!** Wait for the blue sphere popup to appear.
+
+---
+
+## 🎤 Using Jarvis
+
+1. Say **"Hey Jarvis"** to wake it up
+2. Say a command like:
+   - "Open Chrome"
+   - "Search for files named document"
+   - "Open YouTube in Chrome"
+   - "Close notepad"
+
+3. Exit: Click "Exit" in the system tray icon (bottom right)
+
+---
+
+## 📚 Documentation Files
+
+I created detailed guides for you:
+
+- **RUN_JARVIS_COMMANDS.txt** ← Start here (simple guide)
+- **QUICK_START.txt** ← All commands at a glance
+- **RUNNING_JARVIS.md** ← Complete setup guide
+
+---
+
+## ⚡ One-Liner (If Setup Already Done)
+
+```bash
+cd C:\Jarvis && venv\Scripts\activate && python tray_app.py
+```
+
+---
+
+## 🛠️ Quick Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| "No module named X" | `pip install [package]` |
+| "Ollama not responding" | Run `ollama serve` in another terminal |
+| "Microphone not found" | Check Windows audio settings |
+| "Permission denied" | Right-click cmd → "Run as admin" |
+| Can't see the window | Check system tray (bottom right) |
+
+---
+
+## ✅ Quick Check Before Running
+
+```bash
+# All good?
+python --version
+ollama list
+python -m py_compile C:\Jarvis\jarvis.py
+```
+
+---
+
+**Ready? Run:** `python tray_app.py` 🎉
