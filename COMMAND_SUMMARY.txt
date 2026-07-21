@@ -1,0 +1,154 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
+║                         🎯 JARVIS - RUN COMMAND SUMMARY                       ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+                            📌 THE MAIN COMMAND
+                            ═══════════════════════════════════════
+
+                              python tray_app.py
+
+            This is what you run to start Jarvis! But first read below...
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                          🔧 ONE-TIME SETUP (First Time Only)                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+1️⃣  Install Ollama
+    Download: https://ollama.ai
+    Install it on your computer
+
+2️⃣  Download a Model
+    ollama pull llama3.1:8b
+
+3️⃣  Go to Jarvis folder
+    cd C:\Jarvis
+
+4️⃣  Create Python environment
+    python -m venv venv
+
+5️⃣  Activate environment
+    venv\Scripts\activate
+
+6️⃣  Install packages
+    pip install ollama pyttsx3 pyaudio sounddevice openwakeword faster-whisper webrtcvad pystray pillow pywebview send2trash psutil
+
+✅  SETUP COMPLETE!
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        ▶️  HOW TO RUN (Every Time)                           ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+You need TWO terminals open at the same time:
+
+┌─ TERMINAL 1: Start Ollama (Leave Running) ───────────────────────────────────┐
+│                                                                                │
+│  ollama serve                                                                  │
+│                                                                                │
+│  (This keeps the AI brain running in background)                              │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ TERMINAL 2: Run Jarvis ───────────────────────────────────────────────────────┐
+│                                                                                │
+│  cd C:\Jarvis                                                                  │
+│  venv\Scripts\activate                                                         │
+│  python tray_app.py                                                            │
+│                                                                                │
+│  (Wait for the blue sphere popup to appear)                                   │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+🎉  JARVIS IS NOW RUNNING!
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                           🎤 USING JARVIS                                     ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+1. Say "Hey Jarvis" (speak clearly into your microphone)
+
+2. The popup will light up and Jarvis will respond with "Yes?"
+
+3. Give commands like:
+   • "Open Chrome"
+   • "Open YouTube in Chrome"
+   • "Search for files named document"
+   • "Close notepad"
+   • "Open my downloads folder"
+   • "What time is it?"
+
+4. To exit: Click "Exit" in the system tray icon (bottom right of screen)
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                      ⚡ QUICK REFERENCE COMMANDS                              ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌ One-Liner (if already set up) ─────────────────────────────────────────────────┐
+│  cd C:\Jarvis && venv\Scripts\activate && python tray_app.py                  │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌ Check if Ollama is running ────────────────────────────────────────────────────┐
+│  ollama list                                                                   │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌ Check if Python version is OK ─────────────────────────────────────────────────┐
+│  python --version                                                              │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌ View Jarvis logs (if something goes wrong) ─────────────────────────────────────┐
+│  type %USERPROFILE%\jarvis_log.txt                                             │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌ Download a different model ────────────────────────────────────────────────────┐
+│  ollama pull mistral:7b                                                        │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                      🛠️ QUICK TROUBLESHOOTING                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+❌ "No module named X"
+   ✅ Solution: pip install [package_name]
+
+❌ "Ollama is not responding"
+   ✅ Solution: Make sure Terminal 1 with "ollama serve" is running
+
+❌ "Microphone not found"
+   ✅ Solution: Check Windows sound settings and microphone connection
+
+❌ "Permission denied"
+   ✅ Solution: Right-click Command Prompt → "Run as Administrator"
+
+❌ Can't see the window
+   ✅ Solution: Look in system tray at bottom right of screen
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                         📁 FILES YOU NEED TO KNOW                             ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+HOW_TO_RUN.txt ..................... This file (start here!)
+RUN_JARVIS_COMMANDS.txt ............ Detailed step-by-step guide
+QUICK_START.txt ................... All commands reference
+RUNNING_JARVIS.md ................. Complete setup guide
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                         ✅ READY TO RUN!                                      ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+All set? Open two terminals and run:
+
+Terminal 1:  ollama serve
+Terminal 2:  cd C:\Jarvis && venv\Scripts\activate && python tray_app.py
+
+Say "Hey Jarvis" and enjoy! 🚀
+
+════════════════════════════════════════════════════════════════════════════════
