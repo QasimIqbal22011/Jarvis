@@ -4,6 +4,19 @@ import time
 
 
 _lock = threading.Lock()
+_engine = None
+
+
+def reset_delay():
+    """Reset TTS engine state and clear any pending delays."""
+    global _engine
+    try:
+        if _engine:
+            _engine.stop()
+    except Exception:
+        pass
+    # Small delay to ensure clean state
+    time.sleep(0.05)
 
 
 def speak(text):
