@@ -3,11 +3,37 @@ import shutil
 import string
 import subprocess
 import getpass
+from pathlib import Path
 
 import psutil
 from send2trash import send2trash
 
 USERNAME = getpass.getuser()
+
+# System directories that are off-limits for destructive operations
+PROTECTED_PATHS = {
+    "C:\\Windows",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "C:\\ProgramData",
+    "C:\\$Recycle.Bin",
+    f"C:\\Users\\{USERNAME}\\AppData",
+}
+
+def is_path_allowed(file_path: str, allow_system: bool = False) -> bool:
+    """
+    Check if a path is safe for destructive operations.
+    Blocks system directories unless explicitly allowed.
+    """
+    if not allow_system:
+        try:
+            path = Path(file_path).resolve()
+            for protected in PROTECTED_PATHS:
+                if str(path).startswith(protected.upper()) or str(path).upper().startswith(protected.upper()):
+                    return False
+        except Exception:
+            return False
+    return True
 
 # -------------------------------------------------
 # Known Windows applications
@@ -93,35 +119,43 @@ def is_running(process_name: str) -> bool:
     return False
 
 
-def open_app(name_or_path: str) -> str:
-
+def open_app(name_or_path: str, url: str = None) -> str:
+    """
+    Open an application by name or path.
+    If url is provided, open the URL in the specified app (e.g., browser).
+    Falls back to find_installed_app if app not found in APP_PATHS.
+    """
     target = name_or_path.strip()
 
     # absolute path
-
     if os.path.isabs(target) or ":\\" in target:
-
         if not os.path.exists(target):
             return f"Path not found: {target}"
 
-        os.startfile(target)
-
-        return f"Opening {os.path.basename(target)}."
+        if url:
+            subprocess.Popen([target, url])
+            return f"Opening {url} in {os.path.basename(target)}."
+        else:
+            os.startfile(target)
+            return f"Opening {os.path.basename(target)}."
 
     name = target.lower()
-
     executable = APP_PATHS.get(name)
-
     process_name = APP_PROCESS_NAMES.get(name)
 
+    # If not found in hardcoded paths, try to auto-resolve
     if executable is None:
-        return (
-            f"Unknown application: {name}. "
-            f"Use find_installed_app."
-        )
+        found = find_installed_app(name)
+        if found != "NOT_FOUND_IN_START_MENU":
+            paths = found.split("\n")
+            if len(paths) == 1:
+                executable = paths[0]
+            elif len(paths) > 1:
+                return f"Found multiple matches:\n{found}\nPlease specify which one."
+        else:
+            return f"Unknown application: {name}. Could not find it."
 
-    # URI apps
-
+    # URI apps (like ms-settings:)
     if executable.startswith("ms-"):
         os.startfile(executable)
         return f"Opening {name}."
@@ -130,13 +164,24 @@ def open_app(name_or_path: str) -> str:
         return f"{name.capitalize()} is already running."
 
     try:
-        subprocess.Popen(executable)
-        return f"Opening {name}."
+        if url:
+            subprocess.Popen([executable, url])
+            return f"Opening {url} in {name}."
+        else:
+            subprocess.Popen(executable)
+            return f"Opening {name}."
     except FileNotFoundError:
         return (
             f"{name} is known but isn't installed "
             f"at the expected location."
         )
+
+
+def open_url(url: str, browser: str = "chrome") -> str:
+    """Open a URL in the specified browser."""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return open_app(browser, url=url)
 
 def close_app(name: str) -> str:
 
@@ -329,29 +374,42 @@ def open_folder(path):
 
 
 def delete_file(path):
-
+    """Delete a file with path validation to prevent system damage."""
     path = path.strip()
 
     if not os.path.exists(path):
         return "File not found."
 
-    send2trash(path)
+    # Sandbox check: prevent deletion of system files
+    if not is_path_allowed(path, allow_system=False):
+        return f"Cannot delete {path}: This is a protected system path. This action requires explicit manual confirmation."
 
-    return f"Moved {path} to the recycle bin."
+    try:
+        send2trash(path)
+        return f"Moved {path} to the recycle bin."
+    except Exception as e:
+        # Fallback if send2trash fails (e.g., network drive)
+        try:
+            os.remove(path)
+            return f"Permanently deleted {path} (could not move to trash)."
+        except Exception:
+            return f"Could not delete {path}: {str(e)}"
 
 
 def copy_file(src, dest):
-
+    """Copy a file with sandbox validation."""
     src = src.strip()
     dest = dest.strip()
 
     if not os.path.exists(src):
         return "Source file not found."
 
+    # Validate destination is allowed
+    if not is_path_allowed(dest, allow_system=False):
+        return f"Cannot copy to {dest}: This is a protected system path."
+
     try:
-
         shutil.copy2(src, dest)
-
         return f"Copied to {dest}."
 
     except Exception as e:
@@ -360,19 +418,20 @@ def copy_file(src, dest):
 
 
 def move_file(src, dest):
-
+    """Move a file with sandbox validation."""
     src = src.strip()
     dest = dest.strip()
 
     if not os.path.exists(src):
         return "Source file not found."
 
+    # Validate destination is allowed
+    if not is_path_allowed(dest, allow_system=False):
+        return f"Cannot move to {dest}: This is a protected system path."
+
     try:
-
         shutil.move(src, dest)
-
         return f"Moved to {dest}."
 
     except Exception as e:
-
         return str(e)
