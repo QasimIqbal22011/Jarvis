@@ -4,10 +4,21 @@ import collections
 import webrtcvad
 from faster_whisper import WhisperModel
 
-whisper_model = WhisperModel("small.en", device="cpu", compute_type="int8")
-vad = webrtcvad.Vad(2)
+whisper_model = WhisperModel(
+    "base.en",
+    device="cpu",
+    compute_type="int8",
+    cpu_threads=8,
+    num_workers=2,
+)
+vad = webrtcvad.Vad(3)
 
-def record_command(samplerate=16000, max_duration=8, silence_duration=0.8, on_level=None):
+def record_command(
+    samplerate=16000,
+    max_duration=5,
+    silence_duration=0.35,
+    on_level=None,
+):
     """on_level: optional callback(level: float 0.0-1.0) fired once per frame
     with the frame's normalized RMS volume, used to drive live GUI feedback."""
     frame_ms = 30
@@ -53,9 +64,32 @@ def record_command(samplerate=16000, max_duration=8, silence_duration=0.8, on_le
     audio = np.concatenate(voiced_frames).flatten().astype(np.float32) / 32768.0
     return audio
 
-def transcribe(audio, samplerate=16000):
-    if audio.size == 0:
+def transcribe(audio):
+
+    import numpy as np
+
+    if audio is None:
         return ""
-    segments, _ = whisper_model.transcribe(audio, language="en", vad_filter=True)
-    text = " ".join(segment.text for segment in segments)
+
+
+    if audio.dtype != np.float32:
+        audio = audio.astype(np.float32) / 32768.0
+
+
+    result = whisper_model.transcribe(
+        audio,
+        language="en",
+        vad_filter=True
+    )
+
+
+    segments = result[0]
+
+
+    text = " ".join(
+        segment.text
+        for segment in segments
+    )
+
+
     return text.strip()
