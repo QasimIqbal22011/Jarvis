@@ -8,7 +8,7 @@ from core.state import AssistantState
 from core.router import CommandRouter
 from speak import speak, reset_delay
 from actions import (
-    open_app, close_app, search_files, open_file, open_folder,
+    open_app, open_url, close_app, search_files, open_file, open_folder,
     delete_file, copy_file, move_file, find_installed_app, quick_search_files
 )
 import gui
@@ -57,61 +57,83 @@ def confirm_delete(path: str) -> str:
     else:
         return "Okay, cancelled. Nothing was deleted."
 
-def parse_response(raw: str):
-    raw = raw.strip()
-    if raw.startswith("ACTION:"):
-        parts = raw.split(":", 2)
-        if len(parts) == 3:
-            return "ACTION", parts[1], parts[2]
-        return "SAY", None, "I tried to take an action but couldn't parse it."
-    elif raw.startswith("ASK:"):
-        return "ASK", None, raw[len("ASK:"):].strip()
-    elif raw.startswith("SAY:"):
-        return "SAY", None, raw[len("SAY:"):].strip()
-    else:
-        return "SAY", None, raw
-
-ACTIONS = {
-    "find_installed_app": lambda args: find_installed_app(args[0]),
-    "quick_search_files": lambda args: quick_search_files(args[0]),
-    "search_files": lambda args: search_files(args[0]),
-    "open_app": lambda args: open_app(args[0]),
-    "close_app": lambda args: close_app(args[0]),
-    "open_file": lambda args: open_file(args[0]),
-    "open_folder": lambda args: open_folder(args[0]),
-    "delete_file": lambda args: confirm_delete(args[0]),
-    "copy_file": lambda args: copy_file(args[0], args[1]),
-    "move_file": lambda args: move_file(args[0], args[1]),
-}
-
-router = CommandRouter(ACTIONS)
-
-
-def handle_command(text):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": text}
-    ]
-    last_raw = None
-
-    for step in range(MAX_STEPS):
-        gui.set_state('thinking')
-        raw = ""
-
-        for chunk in assistant.stream_llm(messages):
+def accumulate_stream(messages):
+    """
+    Accumulate a complete response from the LLM stream.
+    Ensures we get the full response before parsing to avoid fragmentation.
+    """
+    raw = ""
+    try:
+        for chunk in assistant.stream_messages(messages):
             if "message" not in chunk:
                 continue
 
             content = chunk["message"].get("content", "")
             raw += content
 
-            # Stop generating as soon as a complete command is produced
+            # Early exit on complete command (optimization)
             if raw.startswith(("ACTION:", "SAY:", "ASK:")) and "\n" in raw:
                 break
 
-        raw = raw.strip()
+        return raw.strip()
+    except Exception as e:
+        print(f"[Jarvis] Stream error: {e}")
+        return ""
+
+
+def parse_response(raw: str):
+    """
+    Parse LLM response with robust error handling.
+    Case-insensitive and handles whitespace variations.
+    """
+    raw = raw.strip()
+    
+    # Try ACTION: format
+    if raw.upper().startswith("ACTION:"):
+        parts = raw.split(":", 2)
+        if len(parts) >= 3:
+            return "ACTION", parts[1].strip(), parts[2].strip()
+        return "SAY", None, "I tried to take an action but couldn't parse the arguments."
+    
+    # Try ASK: format
+    if raw.upper().startswith("ASK:"):
+        question = raw[4:].strip()
+        return "ASK", None, question
+    
+    # Try SAY: format
+    if raw.upper().startswith("SAY:"):
+        response = raw[4:].strip()
+        return "SAY", None, response
+    
+    # Fallback: treat as response
+    return "SAY", None, raw
+
+
+def handle_command(text):
+    """
+    Handle a command with improved parsing, error recovery, and loop detection.
+    """
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": text}
+    ]
+    last_raw = None
+    max_follow_ups = 3  # Limit follow-up turns
+    follow_up_count = 0
+
+    for step in range(MAX_STEPS):
+        gui.set_state('thinking')
+        
+        # Accumulate full response before parsing
+        raw = accumulate_stream(messages)
+        
+        if not raw:
+            jarvis_speak("I didn't get a response from the language model. Please try again.")
+            return
+
         print(f"[Jarvis reasoning] {raw}")
 
+        # Detect infinite loops
         if raw.strip() == last_raw:
             jarvis_speak("I seem to be stuck repeating myself. Can you rephrase what you'd like?")
             return
@@ -124,6 +146,12 @@ def handle_command(text):
             return
 
         if kind == "ASK":
+            # Limit follow-up questions
+            if follow_up_count >= max_follow_ups:
+                jarvis_speak("I asked too many questions. Let's start over with a clearer request.")
+                return
+            
+            follow_up_count += 1
             audio = speak_and_listen(payload)
             answer = transcribe(audio)
             print(f"You said: {answer}")
@@ -143,6 +171,26 @@ def handle_command(text):
             continue
 
     jarvis_speak("I wasn't able to finish that in a reasonable number of steps. Can you clarify what you'd like?")
+
+
+# Initialize actions dictionary
+ACTIONS = {
+    "find_installed_app": lambda args: find_installed_app(args[0]) if args else "No app name provided",
+    "quick_search_files": lambda args: quick_search_files(args[0]) if args else "No keyword provided",
+    "search_files": lambda args: search_files(args[0]) if args else "No keyword provided",
+    "open_app": lambda args: open_app(args[0]) if args else "No app name provided",
+    "open_url": lambda args: open_url(args[0], args[1] if len(args) > 1 else "chrome") if args else "No URL provided",
+    "close_app": lambda args: close_app(args[0]) if args else "No app name provided",
+    "open_file": lambda args: open_file(args[0]) if args else "No file path provided",
+    "open_folder": lambda args: open_folder(args[0]) if args else "No folder path provided",
+    "delete_file": lambda args: confirm_delete(args[0]) if args else "No file path provided",
+    "copy_file": lambda args: copy_file(args[0], args[1]) if len(args) >= 2 else "Source and destination paths required",
+    "move_file": lambda args: move_file(args[0], args[1]) if len(args) >= 2 else "Source and destination paths required",
+}
+
+# Initialize router with actions
+router = CommandRouter(ACTIONS)
+
 
 def main(stop_event=None):
     gui.wait_until_ready()

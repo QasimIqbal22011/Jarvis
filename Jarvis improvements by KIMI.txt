@@ -1,0 +1,331 @@
+1. wake.py — Wake Word Detection
+Current state: You use openwakeword with sounddevice, which is solid. You download models at import time and instantiate the model globally.
+Issues & Suggestions:
+Model download at import time: openwakeword.utils.download_models() runs every time the module is imported. If the user is offline or the download server is slow, Jarvis won't start. Move this to a setup script or check if models exist locally first.
+No error handling for microphone failure: If sd.InputStream fails (mic in use by another app, no mic plugged in), the thread crashes silently. Wrap the stream creation in a try/except and emit a tray notification or log entry.
+Hardcoded threshold & frames: WAKE_THRESHOLD = 0.6 and CONSECUTIVE_FRAMES_REQUIRED = 2 are magic numbers. In noisy environments, this may false-trigger or miss triggers. Consider making these configurable via a settings file, or add a brief calibration mode on first run.
+No microphone selection: sounddevice defaults to the system default input device. If the user has multiple mics (e.g., a headset vs. laptop built-in), there's no way to configure which one Jarvis listens to. Add a mic selection dropdown in a settings panel.
+Memory leak potential: model.reset() is called after detection, but the Model object holds state across detections. If Jarvis runs for days, monitor RAM usage. If it grows, consider re-instantiating the model periodically.
+2. tray_app.py — System Tray & Process Orchestration
+Current state: This is your entry point. It handles admin elevation, spawns the tray icon, starts the Jarvis worker thread, and launches the GUI on the main thread.
+Issues & Suggestions:
+Admin elevation logic is fragile: relaunch_as_admin() uses ShellExecuteW with runas. This works, but if UAC is disabled or the user cancels the prompt, Jarvis exits without explanation. Add a fallback message box (via ctypes + MessageBoxW) telling the user why admin is needed.
+Why admin is required: You mentioned Jarvis should have "full administrative access." Be very specific about why. If it's just to open/close apps and manipulate files, admin is not required — standard user rights are sufficient. If you need admin for things like installing software, modifying system files, or controlling services, document exactly which actions need it. Running as admin 24/7 is a security risk.
+GUI blocks the main thread: gui.create_gui() blocks until exit. This means if the GUI crashes, the tray icon may stay alive but the worker thread is orphaned. Consider running the GUI in its own process (not thread), so a GUI crash doesn't kill the tray or the wake-word listener.
+No process health monitoring: If jarvis_worker() crashes (e.g., LLM connection fails, Whisper model loading fails), the tray icon stays green but Jarvis is dead. Add a heartbeat: the worker thread pings the tray every N seconds. If it stops, show a "Jarvis has stopped — click to restart" tray notification.
+Log file grows forever: jarvis_log.txt is opened in append mode with no rotation. Over months, this could become gigabytes. Add a simple rotation (e.g., max 5MB, keep 3 backups) or use Python's logging.handlers.RotatingFileHandler.
+Startup registry path is wrong for PyInstaller: In startup.py, PYTHONW points to the Python interpreter. For a PyInstaller --noconsole exe, sys.executable is the .exe itself, not pythonw.exe. The startup entry should point to the .exe directly. Detect sys.frozen and adjust the registry value accordingly.
+3. speak.py — Text-to-Speech
+Current state: Uses pyttsx3 (SAPI5) with a word-level callback to approximate audio levels for the GUI.
+Issues & Suggestions:
+pyttsx3 is robotic and slow: SAPI5 voices sound very dated. For a "Jarvis" feel, you want a neural TTS. Consider:
+Piper TTS (fast, local, runs on CPU, ~2MB-100MB models)
+MeloTTS (good quality, local)
+Coqui TTS (more flexible, slightly heavier)
+These output WAV files that you can play via pyaudio or sounddevice, and you can extract real amplitude data for the GUI instead of faking it from word length.
+Engine recreation on every speak: engine = pyttsx3.init() inside speak() is expensive. SAPI engine initialization takes 200-500ms. Move engine initialization to module level and reuse it. The _lock is good, but you can keep one engine instance alive.
+Word-length audio level is fake: _on_word uses length * 0.06 to guess volume. This doesn't correlate with actual speech loudness. With a neural TTS, you can analyze the output waveform's RMS per frame and feed real audio levels to the GUI.
+No interrupt capability: If Jarvis starts speaking a long sentence and you say "Hey Jarvis" mid-sentence, it can't be interrupted. Add a global "stop speaking" flag that speak() checks between words or sentences, and trigger it from the wake word detector.
+4. listen_command.py — Voice Activity Detection & STT
+Current state: Uses webrtcvad for VAD and faster-whisper (small.en, CPU, int8) for transcription.
+Issues & Suggestions:
+Whisper model is too small for commands: small.en is fast but struggles with proper nouns, file paths, and app names (e.g., "open Adobe Photoshop" might transcribe as "open a dough photoshop"). For a PC assistant, accuracy on technical terms matters more than speed. Consider:
+base.en or small.en for wake word follow-up (fast, short phrases)
+medium.en or large-v3 for the first command after wake word (slower but more accurate)
+You can switch models dynamically: use small.en for the quick "Yes?" confirmation, then load medium.en for the actual command.
+No speaker diarization / noise rejection: If someone else talks in the room, VAD will trigger and Whisper will transcribe it. Consider using silero-vad instead of webrtcvad — it's more robust to noise and has better speech/non-speech discrimination.
+Audio level callback gain is arbitrary: rms * 9.0 is a magic number that depends on the mic's hardware gain. Add a one-time mic calibration at install that measures ambient noise and sets the gain dynamically.
+No streaming transcription: record_command buffers the entire utterance, then sends it to Whisper. This adds 200-800ms of latency. faster-whisper supports chunked/streaming transcription. For a responsive feel, start transcribing while the user is still speaking and show partial results in the GUI.
+Language is hardcoded to English: language="en" is fine for now, but if you ever want multi-language support, detect language from the first few seconds or let the user set it.
+5. jarvis_ui.html — The GUI (Three.js Sphere)
+Current state: Beautiful. A Three.js particle sphere with state-aware pulsing, chat bubbles, and audio reactivity.
+Issues & Suggestions:
+Three.js is bundled inline as three.min.js: The HTML references three.min.js locally. Make sure this file is included in your PyInstaller bundle via --add-data. If it's missing, the window opens to a black screen with no error visible to the user.
+No error boundary: If setJarvisState or addMessage is called with malformed data (e.g., undefined sender), the JS may throw and break the render loop. Add try/catch wrappers around the exposed window.* functions.
+Memory leak in chat: addMessage appends DOM nodes forever. If Jarvis runs for hours with heavy conversation, the DOM grows unbounded. Add a max message limit (e.g., 100 messages) and remove old ones from the top.
+No "thinking" intermediate feedback: When handle_command calls the LLM, the GUI shows "thinking" but no partial output. If the LLM takes 5 seconds to respond, the user sees a frozen sphere. Consider streaming the LLM response token-by-token to the GUI, showing Jarvis "typing" the response live.
+Resize handling: onResize updates the renderer, but if the window is minimized then restored, the canvas may render at 0x0 briefly. Add a visibility check (document.visibilityState) and pause rendering when hidden to save GPU/CPU.
+6. gui.py — Python-to-GUI Bridge
+Current state: Uses pywebview to host the HTML. Handles state changes, message appending, and audio level smoothing via a dedicated thread.
+Issues & Suggestions:
+evaluate_js is fire-and-forget: If the JS function throws, Python never knows. For critical calls (like setJarvisState), consider using evaluate_js with a return value and logging failures.
+Window show/hide latency: show_window() and hide_window() call pywebview methods. On some systems, showing a frameless window can take 300-500ms, making the "Hey Jarvis" → popup feel sluggish. Pre-create the window hidden but fully rendered, then show it. Or use window.move(x, y) to position it off-screen, then move it on-screen instead of show/hide.
+No multi-monitor support: The window always appears at the default position. Add logic to detect which monitor the mouse cursor is on (or which has focus) and position the popup near the center-bottom of that screen.
+_audio_level_loop thread never stops: It's a daemon=True thread with while True. When the app exits, this thread may hold references and delay process termination. Add a shutdown flag checked in the loop.
+HTML path resolution: resource_path uses sys._MEIPASS for PyInstaller, which is correct. But if running from source and the HTML is in a different directory than the script, it fails. Consider a fallback that searches sys.path or uses pkg_resources if available.
+7. actions.py — System Actions
+Current state: Handles app opening/closing, file operations, and search. Uses hardcoded paths, psutil, send2trash, and os.startfile.
+Issues & Suggestions:
+Hardcoded app paths break on non-standard installs: chrome points to C:\Program Files\Google\Chrome\Application\chrome.exe. If the user installed Chrome in a different location, or uses Edge/Brave/Firefox, it fails. Your find_installed_app is a good start, but it's only used manually. Integrate it: if open_app("chrome") fails, automatically call find_installed_app("chrome") and cache the result.
+No URL handling: "Open YouTube in Chrome" is a common request. Your open_app doesn't accept URLs. Add a url parameter: open_app("chrome", url="https://youtube.com") or detect if the argument looks like a URL and pass it via subprocess.Popen([chrome_path, url]).
+App closing is too blunt: close_app uses proc.terminate(). Some apps (like Chrome with multiple processes) may not close gracefully, or the user may lose unsaved work. For apps that support it, use window-based closing (pywinauto or uiautomation to send Alt+F4 to the main window) instead of killing the process.
+File operations lack undo: delete_file uses send2trash (good), but move_file and copy_file are permanent. Add an action log (SQLite or JSON) that records every file operation with a UUID, so the user can say "Jarvis, undo that" and you can reverse the last action.
+No path validation / sandboxing: A malicious or hallucinated command like delete_file("C:\Windows\System32") would be catastrophic. Add a is_path_allowed(path) check that blocks system directories, or at least requires explicit confirmation. Your confirm_delete is good, but apply it to all destructive operations, not just delete.
+Search is either too slow or too shallow: quick_search_files is fast but only 2 levels deep. search_files is a full os.walk of every drive — on a 4TB HDD, this can take 10+ minutes and lock up the UI. Add an indexing layer:
+Use watchdog to maintain a real-time file index in SQLite.
+Or use Windows Search Index (Windows.Search COM API) for instant, system-wide file search.
+No text input / typing: "Open Notepad and write what I'm saying" is in your goal, but actions.py has no type_text or write_to_window function. Add pyautogui.typewrite or pywinauto keyboard input actions.
+8. jarvis.py — Main Orchestrator
+Current state: The brain. Handles the conversation loop, LLM streaming, action parsing, confirmation gates, and follow-up listening.
+Issues & Suggestions:
+LLM prompt engineering is critical but invisible: I don't see SYSTEM_PROMPT or models/prompts.py, but the parsing logic (parse_response) expects exact prefixes (ACTION:, SAY:, ASK:). If the LLM hallucinates slightly (e.g., Action: open_app lowercase, or extra whitespace), the parser fails. Make the parser case-insensitive and strip aggressively. Better yet, use structured output / JSON mode if your Ollama version supports it. Force the model to return JSON like {"type": "action", "name": "open_app", "args": ["chrome"]} instead of parsing strings.
+No tool schema for the LLM: The LLM has to guess what actions exist and what arguments they take. Add a dynamic tool description block to the system prompt that lists all available actions, their parameters, and examples. This dramatically improves reliability.
+Conversation memory is only within one session: messages is rebuilt from scratch for every command. If the user says "Open Chrome" then "Close it," the LLM has no memory that "it" refers to Chrome. You need:
+Short-term memory: Persist the last N turns to a JSON file and reload on wake.
+Long-term memory: A vector DB (ChromaDB, FAISS) for facts like "Qasim prefers dark mode" or "Qasim's project folder is D:\Code".
+No error recovery for LLM failure: If Ollama is not running, or the model is unloaded, assistant.stream_llm will raise an exception and crash the worker thread. Wrap it in try/except, show a tray notification "Ollama not responding," and retry with backoff.
+MAX_STEPS = 7 is arbitrary: The loop allows up to 7 back-and-forths. If the LLM gets stuck in a loop (e.g., keeps asking for clarification), it burns all 7 steps and then gives up. Add loop detection: if the same raw response appears twice, break immediately instead of waiting for 7 steps.
+Follow-up listening has no timeout: After the first command, record_command(max_duration=4) loops forever until silence. If the user leaves the room with the TV on, Jarvis may keep transcribing noise and acting on false commands. Add a max follow-up turns limit (e.g., 3 turns) or a total session timeout (e.g., 30 seconds of activity).
+No intent confirmation for ambiguous commands: "Delete the file" — which file? The LLM should ask, but sometimes it guesses wrong. Add a confidence threshold: if the LLM's top action has low confidence (or the argument is a wildcard), force an ASK: confirmation before executing.
+9. startup.py — Windows Startup Registry
+Current state: Adds/removes a registry entry for auto-start.
+Issues & Suggestions:
+Path is wrong for frozen executables: As noted above, PYTHONW and SCRIPT assume a Python environment. For PyInstaller, use sys.executable directly.
+No check for existing entry before adding: add_to_startup blindly overwrites. That's fine, but remove_from_startup only handles FileNotFoundError. If the registry key exists but points to a deleted file, it should clean up.
+No admin check: Modifying HKEY_CURRENT_USER doesn't need admin, but if you ever move to HKEY_LOCAL_MACHINE (all users), you'll need it. Document which hive you use and why.
+10. Missing Pieces for Full Autonomy
+These are not in your codebase yet but are essential for your end goal:
+A. Web Browser Automation
+"Open YouTube in Chrome and search for X" requires more than os.startfile. You need:
+Selenium or Playwright to control Chrome programmatically
+Or Browser-Use (an AI agent framework that controls browsers via LLM)
+Or at minimum, construct URLs with query parameters: chrome.exe "https://youtube.com/results?search_query=X"
+B. Window Management / GUI Automation
+"Close the window I just opened" or "Click the Save button" requires:
+pywinauto or uiautomation to find windows by title/class, send clicks, and read UI text
+A window tracking system that remembers which window Jarvis last interacted with
+C. Text Input / Dictation
+"Open a text document and write what I'm saying" requires:
+pyautogui.typewrite() or pywinauto's keyboard input
+Focus management: ensure the target text field is active before typing
+A "dictation mode" where Jarvis streams STT output directly to the cursor instead of interpreting commands
+D. System Settings Control
+"Turn on dark mode" or "Set volume to 50%" requires:
+Windows Registry edits (winreg)
+COM API calls (wmi, pycaw for volume, pywin32 for power settings)
+These should be wrapped as dedicated actions, not raw LLM-generated commands
+E. File Content Operations
+"Read the first 10 lines of this file" or "Find and replace X with Y in all Python files" requires:
+File reading/parsing actions
+Regex-based search/replace
+Content preview before modification (safety)
+F. LLM Function Calling / Tool Use
+Your current string-parsing approach (ACTION:, SAY:, ASK:) is brittle. Upgrade to:
+Ollama's native tool calling (if available in your version) or
+Structured output (JSON mode) where the LLM returns a predictable schema
+This eliminates parsing ambiguity and makes adding new tools trivial
+Priority Roadmap (What to Do First)
+Table
+Priority	File	Change	Impact
+P0	jarvis.py	Switch LLM output to JSON/structured format instead of string parsing	Reliability ↑↑↑
+P0	actions.py	Add is_path_allowed() sandbox + confirm gate for all destructive ops	Safety ↑↑↑
+P1	speak.py	Replace pyttsx3 with Piper TTS or MeloTTS	Quality ↑↑
+P1	listen_command.py	Add streaming STT (transcribe while speaking) + mic calibration	Latency ↓↓
+P1	jarvis.py	Add persistent short-term memory (JSON file) across wake sessions	Context ↑↑
+P2	gui.py	Pre-render window off-screen; animate in instead of show/hide	Polish ↑
+P2	actions.py	Integrate find_installed_app as fallback in open_app	Robustness ↑
+P2	tray_app.py	Add worker heartbeat / auto-restart on crash	Uptime ↑
+P3	actions.py	Add pywinauto window automation layer	Capability ↑↑
+P3	New file	Add browser automation (Selenium/Playwright) for web tasks	Capability ↑↑
+P3	jarvis.py	Add ChromaDB/FAISS long-term memory for user preferences
+
+1. models/prompts.py — SYSTEM_PROMPT
+Current state: Forces the LLM to output exactly one line with ACTION:, ASK:, or SAY: prefixes. No reasoning allowed, temperature 0.2.
+Critical Issues:
+No tool descriptions in the prompt: The LLM has to memorize your action names and argument formats from the examples alone. When you add new actions (e.g., type_text, set_volume), the model won't know they exist unless you manually update the prompt every time. Add a dynamic tool registry that injects available actions into the prompt at runtime.
+No context about the user's environment: The LLM doesn't know what apps are installed, what files exist, or what the user did 5 minutes ago. Add a "context block" to the prompt with:
+Recently opened apps/files
+Current active window title
+Available drives and common directories
+num_ctx = 2048 is tight for multi-turn: With system prompt + conversation history + tool results, you can hit the limit quickly. Increase to 4096 or 8192 if your hardware allows. Llama 3.1 8B handles 128K context, but Q4_K_M quantization may struggle with very long contexts — test empirically.
+No fallback for malformed output: If the LLM outputs Action: open_app:chrome (lowercase, extra space, missing colon), your parser fails. Make the parser in jarvis.py robust, but also add a "retry" instruction in the prompt: "If you are unsure, respond with ASK:..."
+Suggestion — Restructure the prompt:
+Python
+# Instead of a static string, build it dynamically:
+
+def build_system_prompt(available_actions, recent_context):
+    actions_block = "\n".join(
+        f"ACTION:{name}:{action['signature']}  # {action['description']}"
+        for name, action in available_actions.items()
+    )
+    
+    return f"""You are Jarvis, an intelligent voice assistant with full control over the user's PC.
+
+AVAILABLE ACTIONS:
+{actions_block}
+
+RECENT CONTEXT:
+{recent_context}
+
+RULES:
+- Respond with EXACTLY ONE line.
+- Use the fastest method first.
+- Never repeat the same action in one session.
+- If a path is ambiguous, use ASK: to clarify.
+- Only output ACTION:, ASK:, or SAY: prefixes.
+"""
+2. models/ollama_client.py — OllamaClient
+Current state: Thin wrapper around ollama.chat(). Stream and non-stream modes.
+Issues:
+No connection health check: If Ollama isn't running, ollama.chat() raises a ConnectionError and crashes the worker thread. Add a ping() method that calls ollama.list() on startup and retries with exponential backoff.
+No model loading management: keep_alive="30m" keeps the model in RAM for 30 minutes after last use. If the user says "Hey Jarvis" after 35 minutes, the model has to reload (5-10 second delay). For a voice assistant, this feels broken. Options:
+Set keep_alive="-1m" to keep it loaded forever (uses RAM permanently)
+Or add a background "heartbeat" that pings Ollama every 25 minutes to keep the model warm
+No response timeout: If Ollama hangs (rare but possible), ollama.chat() blocks indefinitely. Wrap it in a threading.Timer or use requests with a timeout.
+No token usage tracking: You can't see if you're hitting context limits. The ollama Python client returns prompt_eval_count and eval_count in the response. Log these to debug context overflow.
+Temperature 0.2 may be too low for creative tasks: For rigid command parsing, 0.2 is good. But when the user says "Write me a poem and save it to a file," the output will be robotic. Consider dynamic temperature: 0.2 for action parsing, 0.7 for content generation.
+3. core/state.py — AssistantState
+Current state: Simple Enum with 5 states.
+Issues:
+Underutilized: I see gui.set_state() being called with strings like 'listening', 'thinking', 'speaking', but AssistantState isn't imported or used in jarvis.py. Use the Enum consistently instead of raw strings to prevent typos.
+Missing states: Add:
+ERROR — for when Ollama is down, mic fails, etc.
+CONFIRMING — when waiting for user yes/no on a destructive action
+FOLLOW_UP — during the post-command listening window
+No state transition validation: Currently any code can call gui.set_state('banana') and the GUI will show "banana" as the status. Add a state machine that validates transitions (e.g., you can't go from IDLE directly to SPEAKING without passing through LISTENING and THINKING).
+4. core/router.py — CommandRouter
+Current state: Maps action names to callable functions. Splits payload by |.
+Issues:
+No argument validation: copy_file expects 2 args, but if the LLM outputs ACTION:copy_file:C:\file.txt, args becomes ["C:\file.txt"] and action(args) will raise IndexError. Add argument count validation before calling.
+No argument type conversion: All arguments are strings. If you add an action like set_volume:50, the router passes "50" as a string. The action function has to convert it. Consider adding type hints to the action registry and auto-converting.
+No action result caching: If the user says "Find Chrome" and then "Open it," the LLM will call find_installed_app:chrome again. Cache recent action results (LRU cache, 10-20 entries) and return cached results for identical calls within a session.
+No action execution time limit: search_files on a full drive can take minutes. The GUI stays in THINKING state the whole time. Add a timeout (e.g., 10 seconds) and return a partial result or "search timed out, try a more specific query."
+Suggestion — Enhanced router:
+Python
+class CommandRouter:
+    def __init__(self, actions):
+        self.actions = actions
+        self.cache = {}  # LRU cache for action results
+        self.max_cache_size = 20
+        
+    def execute(self, action_name, payload):
+        args = payload.split("|")
+        
+        action_meta = self.actions.get(action_name)
+        if action_meta is None:
+            return False, f"Unknown action: {action_name}"
+            
+        # Validate arg count
+        expected_args = action_meta.get('arg_count')
+        if expected_args and len(args) != expected_args:
+            return False, f"Expected {expected_args} args, got {len(args)}"
+            
+        # Check cache
+        cache_key = (action_name, tuple(args))
+        if cache_key in self.cache:
+            return True, self.cache[cache_key]
+            
+        try:
+            result = action_meta['func'](args)
+            self.cache[cache_key] = result
+            # Trim cache if too large
+            if len(self.cache) > self.max_cache_size:
+                self.cache.pop(next(iter(self.cache)))
+            return True, result
+        except Exception as e:
+            return False, str(e)
+5. core/assistant.py — Assistant
+Current state: Wraps OllamaClient. Provides ask(), ask_messages(), stream_messages().
+Issues:
+No conversation history management: ask() rebuilds messages from scratch every time. For multi-turn, you need to persist history. Add a ConversationManager that:
+Stores last N turns in a JSON file
+Loads them on startup
+Summarizes old turns when context limit approaches
+No system prompt injection for tool results: When a tool returns a result, you append it as a user message. But the LLM doesn't know why it's seeing this result. Add a lightweight system message before tool results: "The following is the result of your previous action. Use it to decide the next step."
+stream_messages() returns raw generator: The caller (jarvis.py) has to handle chunk parsing. Move chunk accumulation and prefix detection into Assistant so jarvis.py just gets a clean string.
+6. jarvis.py — Main Orchestrator (Revisited with New Context)
+Now that I see Assistant, CommandRouter, and SYSTEM_PROMPT, the issues are clearer:
+The string-parsing loop is the single biggest bottleneck:
+Python
+for chunk in assistant.stream_llm(messages):  # This is wrong — assistant has stream_messages()
+    if "message" not in chunk:
+        continue
+    content = chunk["message"].get("content", "")
+    raw += content
+    if raw.startswith(("ACTION:", "SAY:", "ASK:")) and "\n" in raw:
+        break
+stream_llm doesn't exist — you have stream_messages(). This would crash.
+Chunk-by-chunk prefix detection is fragile: The LLM might output ACTION: split across two chunks ("ACT" in chunk 1, "ION:..." in chunk 2). Your startswith check would miss it. Accumulate the full response first, then parse.
+No JSON mode: Llama 3.1 supports format="json" in Ollama. Force structured output:
+Python
+# In OllamaClient:
+def chat_structured(self, messages, schema):
+    return ollama.chat(
+        model=self.model,
+        messages=messages,
+        format=schema,  # JSON schema
+        stream=False,
+        keep_alive=self.keep_alive,
+        options=self.options,
+    )
+Then your response is guaranteed valid JSON, no string parsing needed.
+7. actions.py — System Actions (Updated File)
+New observations from the updated file:
+open_app still doesn't auto-resolve unknown apps: You have find_installed_app, but open_app doesn't call it. Add fallback logic:
+Python
+def open_app(name_or_path: str) -> str:
+    # ... existing logic ...
+    name = name_or_path.lower()
+    if name in APP_PATHS:
+        subprocess.Popen(APP_PATHS[name])
+        return f"Opening {name}."
+    
+    # NEW: Auto-resolve via Start Menu search
+    result = find_installed_app(name)
+    if result != "NOT_FOUND_IN_START_MENU":
+        paths = result.split("\n")
+        if len(paths) == 1:
+            os.startfile(paths[0])
+            return f"Opening {name} from {paths[0]}."
+        return f"Found multiple matches:\n{result}\nPlease specify which one."
+    
+    return f"I couldn't find {name}."
+APP_PATHS and APP_PROCESS_NAMES are hardcoded: Add a runtime discovery mechanism. On first run, scan Start Menu and populate these dicts automatically. Store in a JSON config file.
+No browser URL support: Add:
+Python
+def open_url(url: str, browser: str = "chrome") -> str:
+    browser_path = APP_PATHS.get(browser, browser)
+    subprocess.Popen([browser_path, url])
+    return f"Opening {url} in {browser}."
+close_app kills processes blindly: Some apps have multiple processes (Chrome: 20+ processes). psutil.terminate() on all of them can corrupt browser sessions. Use pywinauto to find the main window and send Alt+F4, or use taskkill /IM chrome.exe which is more graceful than iterating processes.
+send2trash dependency: Good choice, but if the file is on a network drive or external disk, send2trash may fail. Add a fallback to os.remove with a warning: "Could not move to trash — permanently deleted instead."
+8. Jarvis.spec — PyInstaller Spec
+Current state: Basic spec with faster_whisper data collection. Console enabled.
+Issues:
+console=True contradicts --noconsole goal: Your tray_app.py has logic for sys.frozen redirecting stdout to a log file, but the spec has console=True. This means a console window still appears. Set console=False for the final build.
+Missing openwakeword models: You download models at runtime via openwakeword.utils.download_models(), but if the user is offline on first run, it fails. Bundle the .tflite models into the executable:
+Python
+datas += [(path_to_hey_jarvis_tflite, 'openwakeword_models')]
+Then in wake.py, point Model() to the bundled path.
+Missing Whisper model files: faster_whisper downloads small.en on first use. This is a ~500MB download that happens silently. Bundle it:
+Python
+# Download once, then bundle
+datas += [(path_to_whisper_cache, 'whisper_models')]
+Or use faster_whisper's download_root parameter to point to the bundled directory.
+upx=True may break some DLLs: UPX compression can corrupt certain binary dependencies (notably some CUDA DLLs and audio codecs). Test thoroughly. If you get mysterious crashes, try upx=False.
+No icon: Add icon='jarvis.ico' to the EXE section for a professional tray icon and taskbar appearance.
+Single-file vs. folder: Your spec uses COLLECT, which produces a folder. For distribution, a single .exe is cleaner. Use onefile=True in EXE (but note slower startup due to extraction).
+9. Missing Files I Still Need to See
+To give complete suggestions, I need to see:
+core/assistant.py — full implementation (I only saw the import in jarvis.py)
+models/prompts.py — full SYSTEM_PROMPT (the one you shared may be truncated)
+custom_hooks/ — what PyInstaller hooks you're using
+listen_command.py — full VAD + Whisper integration
+wake.py — full OpenWakeWord integration
+But based on what I've seen, here is your refined priority roadmap:
+Final Priority Roadmap
+Table
+Priority	File	Action	Why
+P0	models/prompts.py	Add dynamic tool registry + environment context block	LLM reliability
+P0	core/router.py	Add arg validation, caching, timeouts	Prevents crashes
+P0	jarvis.py	Fix stream_llm → stream_messages bug; accumulate then parse	Currently broken
+P1	models/ollama_client.py	Add connection health check + heartbeat for model warmup	Uptime
+P1	actions.py	Auto-resolve apps via find_installed_app; add URL support	Capability
+P1	jarvis.py	Add persistent conversation memory (JSON file)	Context awareness
+P2	models/ollama_client.py	Implement JSON mode / structured output	Eliminates parsing
+P2	speak.py	Replace pyttsx3 with Piper TTS	Quality
+P2	Jarvis.spec	Bundle Whisper + OpenWakeWord models; console=False	Distribution
+P3	actions.py	Add pywinauto window automation layer	Full PC control
+P3	New module	Add browser automation (Selenium/Playwright)	Web tasks
+P3	jarvis.py	Add ChromaDB/FAISS long-term memory	Intelligence
+Your architecture is genuinely well-structured. The separation into core/, models/, actions/ is clean. The biggest wins will come from structured LLM output (JSON mode) and persistent memory. Everything else is polish and capability expansion.
